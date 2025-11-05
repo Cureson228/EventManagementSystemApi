@@ -1,26 +1,27 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using EventManagementSystemApi.Extensions;
+using Microsoft.EntityFrameworkCore;
 
 namespace EventManagementSystemApi.Models
 {
     public class AppDbContext : DbContext
     {
-        private readonly IConfiguration _configuration;
-        AppDbContext(IConfiguration configuration)
-        {
-            _configuration = configuration;
+        public AppDbContext(DbContextOptions<AppDbContext> options)
+            :base(options) { }
+        
+
+
+        public DbSet<Event> Events { get; set; }
+
+        public DbSet<Participant> Participants { get; set; }
+
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {   
+            
+            modelBuilder.ConfigureEventModel();
+            modelBuilder.ConfigureParticipantModel();
+            modelBuilder.Ignore<User>();
+
         }
-
-
-        DbSet<Event> Events { get; set; }
-
-        DbSet<Participant> Participants { get; set; }
-
-
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {
-            optionsBuilder.UseNpgsql(connectionString: _configuration.GetConnectionString("AppDbConnection"));
-        }
-
-
     }
 }
