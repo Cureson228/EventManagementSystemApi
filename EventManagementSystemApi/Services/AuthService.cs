@@ -1,5 +1,6 @@
 ﻿using EventManagementSystemApi.Models;
 using EventManagementSystemApi.Models.DTOs;
+using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -25,7 +26,7 @@ namespace EventManagementSystemApi.Services
             var isUserExist = await _userManager.FindByEmailAsync(registerDto.Email);
             if (isUserExist != null)
             {
-                throw new Exception("User with this email already exists");
+                throw new ValidationException("User with this email already exists");
             }
             var user = new User()
             {
@@ -38,7 +39,7 @@ namespace EventManagementSystemApi.Services
 
             if (!result.Succeeded)
             {
-                throw new Exception(string.Join(", ", result.Errors.Select(error => error.Description)));
+                throw new ValidationException(string.Join(", ", result.Errors.Select(error => error.Description)));
             }
 
             return await GenerateTokenAsync(user);
@@ -49,13 +50,13 @@ namespace EventManagementSystemApi.Services
             var user = await _userManager.FindByEmailAsync(loginDto.Email);
             if (user == null)
             {
-                throw new Exception("Invalid email or password");
+                throw new ValidationException("Invalid email or password");
             }
 
             var result = await _signInManager.CheckPasswordSignInAsync(user, loginDto.Password, false);
             if (!result.Succeeded)
             {
-                throw new Exception("Invalid email or password");
+                throw new ValidationException("Invalid email or password");
             }
             return await GenerateTokenAsync(user);
         }

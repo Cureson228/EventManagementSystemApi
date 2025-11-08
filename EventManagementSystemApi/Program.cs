@@ -1,79 +1,40 @@
-﻿using EventManagementSystemApi.Middleware;
-using EventManagementSystemApi.Models;
-using EventManagementSystemApi.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
+﻿using EventManagementSystemApi.Data;
+using EventManagementSystemApi.Extensions;
+using EventManagementSystemApi.Middleware;
+using FluentValidation;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddScoped<IAuthService,AuthService>();
-builder.Services.AddScoped<IEventService,EventService>();
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-{
-    options.UseNpgsql(builder.Configuration.GetConnectionString("AppDbConnection"));
-});
-builder.Services.AddDbContext<UserDbContext>(options =>
-{
-    options.UseNpgsql(builder.Configuration.GetConnectionString("AppDbConnection"));
-});
-
-
-builder.Services.AddIdentity<User, IdentityRole>(options =>
-{
-    options.Password.RequiredLength = 8;
-    options.Password.RequireDigit = true;
-    options.Password.RequireUppercase = true;
-    options.Password.RequireLowercase = true;
-    options.User.RequireUniqueEmail = true;
-    options.Password.RequireNonAlphanumeric = false;
-}).AddEntityFrameworkStores<UserDbContext>();
-
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-}).AddJwtBearer(options =>
-{
-    options.SaveToken = false;
-    options.TokenValidationParameters = new TokenValidationParameters()
-    {
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["AppSettings:JWTSecret"]!)),
-        ValidateIssuer = false,
-        ValidateAudience = false,
-    };
-    options.Events = new JwtBearerEvents
-    {
-        OnChallenge = context =>
-        {
-            context.HandleResponse();
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            context.Response.ContentType = "application/json";
-            return context.Response.WriteAsync("{\"error\":\"Unauthorized\"}");
-        }
-    };
-});
-
-
-builder.Services.AddAuthorization(options =>
-{
-    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
-    .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
-    .RequireAuthenticatedUser()
-    .Build();
-});
+builder.Services.AddCustonServices()
+    .InjectDbContexts(builder.Configuration)
+    .AddCustomIdentity()
+    .AddCustomAuthefication(builder.Configuration)
+    .AddCustomAuthorization();
 
 builder.Services.AddControllers();
 
-
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        await SeedData.InitializeAsync(services);
+        Console.WriteLine("SeedData успешно выполнен!");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Ошибка при выполнении SeedData: {ex.Message}");
+        throw;
+    }
+}
 
 // Configure the HTTP request pipeline.
 
@@ -94,16 +55,9 @@ app.UseCors(configuration =>
     configuration.WithOrigins("http://localhost:4200").AllowAnyMethod().AllowAnyHeader().AllowCredentials();
 });
 
-
-
-
-
 app.UseAuthentication();
 
 app.UseAuthorization();
-
-
-
 
 app.MapControllers();
 

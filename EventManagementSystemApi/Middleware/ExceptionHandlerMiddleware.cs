@@ -1,4 +1,6 @@
-﻿using System.Net;
+﻿using FluentValidation;
+using System.Net;
+using System.Text.Json;
 
 namespace EventManagementSystemApi.Middleware
 {
@@ -18,14 +20,49 @@ namespace EventManagementSystemApi.Middleware
             catch(Exception ex)
             {
                 context.Response.ContentType = "application/json";
-                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                var statusCode = HttpStatusCode.InternalServerError;
+                object response = new { message = "An unexpected error occurred." };
 
-                var response = new
+                switch (ex)
                 {
-                    message = ex.Message,
-                    statusCode = context.Response.StatusCode
-                };
-                await context.Response.WriteAsJsonAsync(response);
+                    case ValidationException validationEx:
+                        statusCode = HttpStatusCode.BadRequest;
+                        response = new
+                        {
+                            message = validationEx.Message,
+                            errors = (validationEx.Errors ?? Enumerable.Empty<FluentValidation.Results.ValidationFailure>())
+                            .Select(e => new
+                            {
+                                field = e.PropertyName,
+                                error = e.ErrorMessage
+                            })
+                            .ToList()
+                        };
+                        break;
+
+                    case UnauthorizedAccessException unauthorizedEx:
+                        statusCode = HttpStatusCode.Unauthorized;
+                        response = new { message = unauthorizedEx.Message };
+                        break;
+
+                    case KeyNotFoundException notFoundEx:
+                        statusCode = HttpStatusCode.NotFound;
+                        response = new { message = notFoundEx.Message };
+                        break;
+
+                    default:
+                        response = new { message = ex.Message };
+                        break;
+                }
+
+                context.Response.StatusCode = (int)statusCode;
+
+                var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+                await context.Response.WriteAsync(json);
             }
             
         }
